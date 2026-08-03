@@ -3,6 +3,7 @@ import { useAuth } from './context/AuthContext.jsx';
 import Home from './pages/Home.jsx';
 import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
+import Browse from './pages/Browse.jsx';
 import './App.css';
 
 function App()
@@ -31,6 +32,7 @@ function App()
             <>
               <Link to="/login">Login</Link>
               <Link to="/register">Register</Link>
+              <Link to="/browse">Browse</Link>
             </>
           )}
       </nav>
@@ -39,6 +41,7 @@ function App()
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/browse" element={<Browse />} />
       </Routes>
     </div>
   );
