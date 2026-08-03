@@ -5,11 +5,15 @@ const cors = require('cors');
 
 const authRoutes = require('./routes/auth');
 const reviewRoutes = require('./routes/reviews');
+const logRoutes = require('./routes/logs');
+const mediaRoutes = require('./routes/media');
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 app.use('/reviews', reviewRoutes);
+app.use('/logs', logRoutes);
+app.use('/media', mediaRoutes);
 
 app.get('/', (req, res) => {
   res.send('Server is running!');
