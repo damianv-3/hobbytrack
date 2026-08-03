@@ -3,6 +3,7 @@ const db = require('../config/db');
 const verifyToken = require('../middleware/verifyToken');
 
 const router = express.Router();
+const axios = require('axios');
 
 router.get('/', async (req, res) =>
 {
@@ -184,6 +185,147 @@ router.post('/books', verifyToken, async (req, res) =>
   {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// CREATE an album FROM a MusicBrainz search result (protected)
+router.post('/albums/from-musicbrainz', verifyToken, async (req, res) =>
+{
+  const connection = await db.getConnection();
+
+  try
+  {
+    const { mbid } = req.body;
+    const userId = req.user.userId;
+
+    if (!mbid)
+    {
+      return res.status(400).json({ error: 'mbid is required' });
+    }
+
+    // Step 1: get release-group details (title, artist, year)
+    const groupResponse = await axios.get(`https://musicbrainz.org/ws/2/release-group/${mbid}`,
+    {
+      params: { fmt: 'json', inc: 'releases' },
+      headers: { 'User-Agent': 'HobbyTrack/1.0 (your-email@example.com)' }
+    });
+
+    const releaseGroup = groupResponse.data;
+    const title = releaseGroup.title;
+    const releaseYear = releaseGroup['first-release-date']
+      ? releaseGroup['first-release-date'].substring(0, 4)
+      : null;
+
+    // Step 2: pick the first actual release to get its tracklist
+    const firstReleaseId = releaseGroup.releases?.[0]?.id;
+    let tracks = [];
+    let artist = 'Unknown Artist';
+
+    if (firstReleaseId)
+    {
+      const releaseResponse = await axios.get(`https://musicbrainz.org/ws/2/release/${firstReleaseId}`,
+      {
+        params: { fmt: 'json', inc: 'recordings+artist-credits' },
+        headers: { 'User-Agent': 'HobbyTrack/1.0 (your-email@example.com)' }
+      });
+
+      artist = releaseResponse.data['artist-credit']?.[0]?.name || 'Unknown Artist';
+
+      const media = releaseResponse.data.media || [];
+      media.forEach((disc) =>
+      {
+        (disc.tracks || []).forEach((track) =>
+        {
+          tracks.push(
+          {
+            title: track.title,
+            durationSeconds: track.length ? Math.round(track.length / 1000) : null
+          });
+        });
+      });
+    }
+
+    // Step 3: save into our database (same transaction pattern as before)
+    await connection.beginTransaction();
+
+    const [mediaResult] = await connection.query(
+      'INSERT INTO media_items (type, title, added_by) VALUES (?, ?, ?)',
+      ['album', title, userId]
+    );
+
+    const mediaId = mediaResult.insertId;
+
+    await connection.query(
+      'INSERT INTO albums (media_id, artist, release_year, track_count) VALUES (?, ?, ?, ?)',
+      [mediaId, artist, releaseYear, tracks.length]
+    );
+
+    for (let i = 0; i < tracks.length; i++)
+    {
+      await connection.query(
+        'INSERT INTO tracks (album_media_id, title, track_number, duration_seconds) VALUES (?, ?, ?, ?)',
+        [mediaId, tracks[i].title, i + 1, tracks[i].durationSeconds]
+      );
+    }
+
+    await connection.commit();
+
+    res.status(201).json({ message: 'Album added from MusicBrainz', mediaId, tracksAdded: tracks.length });
+  }
+  catch (err)
+  {
+    await connection.rollback();
+    console.error(err.message);
+    res.status(500).json({ error: 'Failed to add album' });
+  }
+  finally
+  {
+    connection.release();
+  }
+});
+
+// CREATE a book FROM a Google Books search result (protected)
+router.post('/books/from-google', verifyToken, async (req, res) =>
+{
+  try
+  {
+    const { googleBooksId } = req.body;
+    const userId = req.user.userId;
+
+    if (!googleBooksId)
+    {
+      return res.status(400).json({ error: 'googleBooksId is required' });
+    }
+
+    const response = await axios.get(`https://www.googleapis.com/books/v1/volumes/${googleBooksId}`,
+    {
+      params: { key: process.env.GOOGLE_BOOKS_API_KEY }
+    });
+
+    const info = response.data.volumeInfo;
+    const title = info.title;
+    const author = info.authors?.[0] || 'Unknown Author';
+    const publishYear = info.publishedDate ? info.publishedDate.substring(0, 4) : null;
+    const pageCount = info.pageCount || null;
+
+    const [mediaResult] = await db.query(
+      'INSERT INTO media_items (type, title, added_by) VALUES (?, ?, ?)',
+      ['book', title, userId]
+    );
+
+    const mediaId = mediaResult.insertId;
+
+    await db.query(
+      'INSERT INTO books (media_id, author, publish_year, page_count) VALUES (?, ?, ?, ?)',
+      [mediaId, author, publishYear, pageCount]
+    );
+
+    res.status(201).json({ message: 'Book added from Google Books', mediaId });
+  }
+  catch (err)
+  {
+    console.error(err.message);
+    res.status(500).json({ error: 'Failed to add book' });
   }
 });
 

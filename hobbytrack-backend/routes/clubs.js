@@ -172,6 +172,78 @@ router.delete('/:id/leave', verifyToken, async (req, res) =>
   }
 });
 
+// DELETE a club (protected — owner only)
+router.delete('/:id', verifyToken, async (req, res) =>
+{
+  try
+  {
+    const { id } = req.params;
+    const userId = req.user.userId;
+
+    const [membership] = await db.query(
+      'SELECT * FROM club_members WHERE club_id = ? AND user_id = ?',
+      [id, userId]
+    );
+
+    if (membership.length === 0 || membership[0].role !== 'owner')
+    {
+      return res.status(403).json({ error: 'Only the club owner can delete this club' });
+    }
+
+    await db.query('DELETE FROM clubs WHERE id = ?', [id]);
+
+    res.json({ message: 'Club deleted' });
+  }
+  catch (err)
+  {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.get('/', async (req, res) =>
+{
+  try
+  {
+    const { type, page = 1, limit = 20 } = req.query;
+
+    const offset = (page - 1) * limit;
+
+    let query = 'SELECT id, type, title, added_by, created_at FROM media_items';
+    let countQuery = 'SELECT COUNT(*) AS total FROM media_items';
+    let params = [];
+
+    if (type)
+    {
+      query += ' WHERE type = ?';
+      countQuery += ' WHERE type = ?';
+      params.push(type);
+    }
+
+    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+
+    const [items] = await db.query(query, [...params, parseInt(limit), parseInt(offset)]);
+    const [countResult] = await db.query(countQuery, params);
+
+    res.json(
+    {
+      items,
+      pagination:
+      {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: countResult[0].total,
+        totalPages: Math.ceil(countResult[0].total / limit)
+      }
+    });
+  }
+  catch (err)
+  {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 router.post('/:id/meetings', verifyToken, async (req, res) =>
 {
   try
