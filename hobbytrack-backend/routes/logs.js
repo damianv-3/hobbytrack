@@ -41,11 +41,11 @@ router.get('/media/:mediaId', async (req, res) =>
     const { mediaId } = req.params;
 
     const [logs] = await db.query(
-      `SELECT l.id, l.rating, l.logged_date, l.notes, l.created_at, u.username
-       FROM logs l
-       JOIN users u ON l.user_id = u.id
-       WHERE l.media_id = ?
-       ORDER BY l.logged_date DESC`,
+      `SELECT l.id, l.rating, l.logged_date, l.notes, l.created_at, l.user_id, u.username
+      FROM logs l
+      JOIN users u ON l.user_id = u.id
+      WHERE l.media_id = ?
+      ORDER BY l.logged_date DESC`,
       [mediaId]
     );
 
@@ -65,11 +65,11 @@ router.get('/user/:userId', async (req, res) =>
     const { userId } = req.params;
 
     const [logs] = await db.query(
-      `SELECT l.id, l.rating, l.logged_date, l.notes, m.title, m.type
-       FROM logs l
-       JOIN media_items m ON l.media_id = m.id
-       WHERE l.user_id = ?
-       ORDER BY l.logged_date DESC`,
+      `SELECT l.id, l.rating, l.logged_date, l.notes, l.user_id, l.media_id, m.title, m.type
+      FROM logs l
+      JOIN media_items m ON l.media_id = m.id
+      WHERE l.user_id = ?
+      ORDER BY l.logged_date DESC`,
       [userId]
     );
 

@@ -46,11 +46,11 @@ router.get('/media/:mediaId', async (req, res) =>
     const { mediaId } = req.params;
 
     const [reviews] = await db.query(
-      `SELECT r.id, r.rating, r.review_text, r.created_at, u.username
-       FROM reviews r
-       JOIN users u ON r.user_id = u.id
-       WHERE r.media_id = ?
-       ORDER BY r.created_at DESC`,
+      `SELECT r.id, r.rating, r.review_text, r.created_at, r.user_id, u.username
+      FROM reviews r
+      JOIN users u ON r.user_id = u.id
+      WHERE r.media_id = ?
+      ORDER BY r.created_at DESC`,
       [mediaId]
     );
 
@@ -80,11 +80,11 @@ router.get('/user/:userId', async (req, res) =>
     const { userId } = req.params;
 
     const [reviews] = await db.query(
-      `SELECT r.id, r.rating, r.review_text, r.created_at, m.title, m.type
-       FROM reviews r
-       JOIN media_items m ON r.media_id = m.id
-       WHERE r.user_id = ?
-       ORDER BY r.created_at DESC`,
+      `SELECT r.id, r.rating, r.review_text, r.created_at, r.user_id, r.media_id, m.title, m.type
+      FROM reviews r
+      JOIN media_items m ON r.media_id = m.id
+      WHERE r.user_id = ?
+      ORDER BY r.created_at DESC`,
       [userId]
     );
 

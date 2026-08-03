@@ -33,21 +33,25 @@ function Login()
   };
 
   return (
-    <div style={{ maxWidth: '400px', margin: '50px auto' }}>
-      <h2>Login</h2>
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label>Email</label>
-          <input type="email" name="email" value={formData.email} onChange={handleChange} required />
-        </div>
-        <div>
-          <label>Password</label>
-          <input type="password" name="password" value={formData.password} onChange={handleChange} required />
-        </div>
-        <button type="submit">Login</button>
-      </form>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      <p>Need an account? <Link to="/register">Register</Link></p>
+    <div className="page" style={{ maxWidth: '420px' }}>
+      <div className="card">
+        <div className="card-callnumber">SIGN-IN SLIP</div>
+        <h2 style={{ textTransform: 'none', fontFamily: 'var(--font-display)', fontSize: '1.4rem', color: 'var(--ink)' }}>Welcome back</h2>
+        <form onSubmit={handleSubmit}>
+          <div className="field">
+            <label>Email</label>
+            <input type="email" name="email" value={formData.email} onChange={handleChange} required />
+          </div>
+          <div className="field">
+            <label>Password</label>
+            <input type="password" name="password" value={formData.password} onChange={handleChange} required />
+          </div>
+          <button type="submit" className="btn btn-primary">Log in</button>
+        </form>
+        {error && <p className="error-text" style={{ marginTop: '0.75rem' }}>{error}</p>}
+        <hr className="divider" />
+        <p style={{ fontSize: '0.9rem' }}>New here? <Link to="/register">Register an account</Link></p>
+      </div>
     </div>
   );
 }

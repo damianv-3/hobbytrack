@@ -24,7 +24,7 @@ function Browse()
   {
     try
     {
-      const res = await axios.get('http://localhost:5000/media', 
+      const res = await axios.get('http://localhost:5000/media',
       {
         params: { type: mediaType, page, limit: 10 }
       });
@@ -47,7 +47,7 @@ function Browse()
     try
     {
       const endpoint = mediaType === 'album' ? '/search/albums' : '/search/books';
-      const res = await axios.get(`http://localhost:5000${endpoint}`, 
+      const res = await axios.get(`http://localhost:5000${endpoint}`,
       {
         params: { q: searchQuery }
       });
@@ -71,20 +71,20 @@ function Browse()
     {
       if (mediaType === 'album')
       {
-        await axios.post('http://localhost:5000/media/albums/from-musicbrainz', 
+        await axios.post('http://localhost:5000/media/albums/from-musicbrainz',
           { mbid: result.mbid },
           { headers: { Authorization: `Bearer ${token}` } }
         );
       }
       else
       {
-        await axios.post('http://localhost:5000/media/books/from-google', 
+        await axios.post('http://localhost:5000/media/books/from-google',
           { googleBooksId: result.googleBooksId },
           { headers: { Authorization: `Bearer ${token}` } }
         );
       }
 
-      setAddMessage(`Added "${result.title}" to the library!`);
+      setAddMessage(`Filed "${result.title}" in the catalog.`);
       setSearchResults([]);
       setSearchQuery('');
       fetchLibrary();
@@ -96,63 +96,79 @@ function Browse()
   };
 
   return (
-    <div style={{ maxWidth: '700px', margin: '30px auto' }}>
+    <div className="page">
+      <span className="eyebrow">Catalog Drawer</span>
       <h1>Browse</h1>
 
-      <div style={{ marginBottom: '20px' }}>
-        <button 
+      <div className="type-toggle">
+        <button
+          className={mediaType === 'album' ? 'active-music' : ''}
           onClick={() => { setMediaType('album'); setPage(1); }}
-          style={{ fontWeight: mediaType === 'album' ? 'bold' : 'normal' }}
         >
           Music
         </button>
-        <button 
+        <button
+          className={mediaType === 'book' ? 'active-book' : ''}
           onClick={() => { setMediaType('book'); setPage(1); }}
-          style={{ fontWeight: mediaType === 'book' ? 'bold' : 'normal' }}
         >
           Books
         </button>
       </div>
 
       {token && (
-        <div style={{ marginBottom: '30px', padding: '15px', border: '1px solid #ccc' }}>
-          <h3>Search & add {mediaType === 'album' ? 'an album' : 'a book'}</h3>
-          <form onSubmit={handleSearch}>
+        <div className="card">
+          <div className="card-callnumber">FIND & FILE — {mediaType === 'album' ? 'MUSIC' : 'BOOKS'}</div>
+          <form onSubmit={handleSearch} style={{ display: 'flex', gap: '0.6rem' }}>
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={mediaType === 'album' ? 'Search albums...' : 'Search books...'}
+              placeholder={mediaType === 'album' ? 'Search for an album...' : 'Search for a book...'}
+              style={{ flex: 1, padding: '0.55rem 0.7rem', border: '1.5px solid var(--line)', borderRadius: '3px', background: 'var(--paper)' }}
             />
-            <button type="submit">Search</button>
+            <button type="submit" className="btn">Search</button>
           </form>
 
-          {loading && <p>Searching...</p>}
-          {addMessage && <p>{addMessage}</p>}
+          {loading && <p className="entry-meta" style={{ marginTop: '0.75rem' }}>Searching...</p>}
+          {addMessage && <p className="success-text" style={{ marginTop: '0.75rem' }}>{addMessage}</p>}
 
           {searchResults.map((result) => (
-            <div key={result.mbid || result.googleBooksId} style={{ padding: '8px 0', borderBottom: '1px solid #eee' }}>
-              <strong>{result.title}</strong> — {mediaType === 'album' ? result.artist : result.author}
-              {' '}({result.releaseYear || result.publishYear || 'unknown year'})
-              <button onClick={() => handleAdd(result)} style={{ marginLeft: '10px' }}>Add</button>
+            <div key={result.mbid || result.googleBooksId} className="entry-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <strong>{result.title}</strong>
+                <div className="entry-meta">{mediaType === 'album' ? result.artist : result.author} · {result.releaseYear || result.publishYear || 'year unknown'}</div>
+              </div>
+              <button className="btn btn-small" onClick={() => handleAdd(result)}>File it</button>
             </div>
           ))}
         </div>
       )}
 
-      <h3>Library</h3>
-      {items.length === 0 && <p>No {mediaType === 'album' ? 'albums' : 'books'} yet.</p>}
-      {items.map((item) => (
-        <div key={item.id} style={{ padding: '8px 0', borderBottom: '1px solid #eee' }}>
-          <Link to={`/media/${item.id}`}>{item.title}</Link>
-        </div>
-      ))}
+      <h3 style={{ marginTop: '2rem' }}>In the catalog</h3>
+      {items.length === 0 && <p className="empty-state">Nothing filed under {mediaType === 'album' ? 'music' : 'books'} yet.</p>}
 
-      <div style={{ marginTop: '15px' }}>
-        <button disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button>
-        <span style={{ margin: '0 10px' }}>Page {page} of {totalPages}</span>
-        <button disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</button>
-      </div>
+      {items.length > 0 && (
+        <div className="ledger">
+          <div className="ledger-head">
+            <span className="col-num">No.</span>
+            <span className="col-main">Title</span>
+          </div>
+          {items.map((item) => (
+            <Link key={item.id} to={`/media/${item.id}`} className="ledger-row linked">
+              <span className="col-num">{mediaType === 'album' ? 'MUS' : 'BK'}-{String(item.id).padStart(3, '0')}</span>
+              <span className="col-main" style={{ fontFamily: 'var(--font-display)', fontSize: '1.05rem' }}>{item.title}</span>
+            </Link>
+          ))}
+        </div>
+      )}
+
+      {items.length > 0 && (
+        <div className="pagination">
+          <button className="btn btn-small" disabled={page <= 1} onClick={() => setPage(page - 1)}>Prev</button>
+          <span>Page {page} of {totalPages}</span>
+          <button className="btn btn-small" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</button>
+        </div>
+      )}
     </div>
   );
 }

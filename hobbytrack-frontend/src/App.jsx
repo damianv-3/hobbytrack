@@ -4,6 +4,8 @@ import Home from './pages/Home.jsx';
 import Login from './pages/Login.jsx';
 import Register from './pages/Register.jsx';
 import Browse from './pages/Browse.jsx';
+import MediaDetail from './pages/MediaDetail.jsx';
+import Profile from './pages/Profile.jsx';
 import './App.css';
 
 function App()
@@ -19,22 +21,26 @@ function App()
 
   return (
     <div>
-      <nav style={{ padding: '15px', borderBottom: '1px solid #ccc', display: 'flex', gap: '15px', alignItems: 'center' }}>
-        <Link to="/">HobbyTrack</Link>
-        {user
-          ? (
-            <>
-              <span>Hi, {user.username}</span>
-              <button onClick={handleLogout}>Logout</button>
-            </>
-          )
-          : (
-            <>
-              <Link to="/login">Login</Link>
-              <Link to="/register">Register</Link>
-              <Link to="/browse">Browse</Link>
-            </>
-          )}
+      <nav className="navbar">
+        <Link to="/" className="brand-mark">Ledgible</Link>
+        <Link to="/browse" className="tab-link">Browse</Link>
+        {user && <Link to="/profile" className="tab-link">My Shelf</Link>}
+
+        <div className="navbar-spacer">
+          {user
+            ? (
+              <>
+                <span className="navbar-user">{user.username}</span>
+                <button className="btn btn-small" onClick={handleLogout}>Log out</button>
+              </>
+            )
+            : (
+              <>
+                <Link to="/login" className="tab-link">Login</Link>
+                <Link to="/register" className="tab-link">Register</Link>
+              </>
+            )}
+        </div>
       </nav>
 
       <Routes>
@@ -42,6 +48,8 @@ function App()
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/browse" element={<Browse />} />
+        <Route path="/media/:id" element={<MediaDetail />} />
+        <Route path="/profile" element={<Profile />} />
       </Routes>
     </div>
   );
