@@ -6,6 +6,9 @@ import Register from './pages/Register.jsx';
 import Browse from './pages/Browse.jsx';
 import MediaDetail from './pages/MediaDetail.jsx';
 import Profile from './pages/Profile.jsx';
+import Clubs from './pages/Clubs.jsx';
+import ClubDetail from './pages/ClubDetail.jsx';
+import QuickAdd from './components/QuickAdd.jsx';
 import './App.css';
 
 function App()
@@ -24,6 +27,7 @@ function App()
       <nav className="navbar">
         <Link to="/" className="brand-mark">Ledgible</Link>
         <Link to="/browse" className="tab-link">Browse</Link>
+        <Link to="/clubs" className="tab-link">Clubs</Link>
         {user && <Link to="/profile" className="tab-link">My Shelf</Link>}
 
         <div className="navbar-spacer">
@@ -31,7 +35,8 @@ function App()
             ? (
               <>
                 <span className="navbar-user">{user.username}</span>
-                <button className="btn btn-small" onClick={handleLogout}>Log out</button>
+                <QuickAdd />
+                <button className="btn btn-small btn-onwood" onClick={handleLogout}>Log out</button>
               </>
             )
             : (
@@ -50,6 +55,8 @@ function App()
         <Route path="/browse" element={<Browse />} />
         <Route path="/media/:id" element={<MediaDetail />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/clubs" element={<Clubs />} />
+        <Route path="/clubs/:id" element={<ClubDetail />} />
       </Routes>
     </div>
   );

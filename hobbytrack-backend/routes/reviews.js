@@ -6,6 +6,8 @@ const router = express.Router();
 
 router.post('/', verifyToken, async (req, res) =>
 {
+  const connection = await db.getConnection();
+
   try
   {
     const { mediaId, rating, reviewText } = req.body;
@@ -16,15 +18,28 @@ router.post('/', verifyToken, async (req, res) =>
       return res.status(400).json({ error: 'mediaId and rating are required' });
     }
 
-    const [result] = await db.query(
+    await connection.beginTransaction();
+
+    const [result] = await connection.query(
       'INSERT INTO reviews (user_id, media_id, rating, review_text) VALUES (?, ?, ?, ?)',
       [userId, mediaId, rating, reviewText || null]
     );
+
+    // filing a review also counts as logging it today, same as letterboxd does
+    const today = new Date().toISOString().substring(0, 10);
+    await connection.query(
+      'INSERT INTO logs (user_id, media_id, rating, logged_date, notes) VALUES (?, ?, ?, ?, ?)',
+      [userId, mediaId, rating, today, reviewText || null]
+    );
+
+    await connection.commit();
 
     res.status(201).json({ message: 'Review created', reviewId: result.insertId });
   }
   catch (err)
   {
+    await connection.rollback();
+
     if (err.code === 'ER_DUP_ENTRY')
     {
       return res.status(409).json({ error: 'You already reviewed this item. Use PUT to update it.' });
@@ -36,33 +51,48 @@ router.post('/', verifyToken, async (req, res) =>
     console.error(err);
     res.status(500).json({ error: 'Server error' });
   }
+  finally
+  {
+    connection.release();
+  }
 });
 
-// GET all reviews for a specific media item (public)
 router.get('/media/:mediaId', async (req, res) =>
 {
   try
   {
     const { mediaId } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+    const offset = (page - 1) * limit;
 
     const [reviews] = await db.query(
       `SELECT r.id, r.rating, r.review_text, r.created_at, r.user_id, u.username
-      FROM reviews r
-      JOIN users u ON r.user_id = u.id
-      WHERE r.media_id = ?
-      ORDER BY r.created_at DESC`,
-      [mediaId]
+       FROM reviews r
+       JOIN users u ON r.user_id = u.id
+       WHERE r.media_id = ?
+       ORDER BY r.created_at DESC
+       LIMIT ? OFFSET ?`,
+      [mediaId, parseInt(limit), parseInt(offset)]
     );
 
+    // average and count are computed across ALL reviews, not just this page
     const [avgResult] = await db.query(
       'SELECT AVG(rating) AS avg_rating, COUNT(*) AS review_count FROM reviews WHERE media_id = ?',
       [mediaId]
     );
 
-    res.json({
+    res.json(
+    {
       reviews,
       averageRating: avgResult[0].avg_rating,
-      reviewCount: avgResult[0].review_count
+      reviewCount: avgResult[0].review_count,
+      pagination:
+      {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: avgResult[0].review_count,
+        totalPages: Math.ceil(avgResult[0].review_count / limit)
+      }
     });
   }
   catch (err)
@@ -72,23 +102,37 @@ router.get('/media/:mediaId', async (req, res) =>
   }
 });
 
-// GET all reviews by a specific user (public)
 router.get('/user/:userId', async (req, res) =>
 {
   try
   {
     const { userId } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+    const offset = (page - 1) * limit;
 
     const [reviews] = await db.query(
       `SELECT r.id, r.rating, r.review_text, r.created_at, r.user_id, r.media_id, m.title, m.type
-      FROM reviews r
-      JOIN media_items m ON r.media_id = m.id
-      WHERE r.user_id = ?
-      ORDER BY r.created_at DESC`,
-      [userId]
+       FROM reviews r
+       JOIN media_items m ON r.media_id = m.id
+       WHERE r.user_id = ?
+       ORDER BY r.created_at DESC
+       LIMIT ? OFFSET ?`,
+      [userId, parseInt(limit), parseInt(offset)]
     );
 
-    res.json({ reviews });
+    const [countResult] = await db.query('SELECT COUNT(*) AS total FROM reviews WHERE user_id = ?', [userId]);
+
+    res.json(
+    {
+      reviews,
+      pagination:
+      {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: countResult[0].total,
+        totalPages: Math.ceil(countResult[0].total / limit)
+      }
+    });
   }
   catch (err)
   {

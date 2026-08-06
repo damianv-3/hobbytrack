@@ -33,14 +33,19 @@ function MediaDetail()
   const [editLogRating, setEditLogRating] = useState(0);
   const [editLogNotes, setEditLogNotes] = useState('');
 
+  const [reviewPage, setReviewPage] = useState(1);
+  const [reviewTotalPages, setReviewTotalPages] = useState(1);
+  const [logPage, setLogPage] = useState(1);
+  const [logTotalPages, setLogTotalPages] = useState(1);
+
   const accent = media?.type === 'album' ? 'var(--music)' : 'var(--books)';
 
-  useEffect(() =>
-  {
+    useEffect(() =>
+    {
     fetchMedia();
     fetchReviews();
     fetchLogs();
-  }, [id]);
+    }, [id, reviewPage, logPage]);
 
   const fetchMedia = async () =>
   {
@@ -55,56 +60,59 @@ function MediaDetail()
     }
   };
 
-  const fetchReviews = async () =>
-  {
+    const fetchReviews = async () =>
+    {
     try
     {
-      const res = await axios.get(`http://localhost:5000/reviews/media/${id}`);
-      setReviews(res.data.reviews);
-      setAverageRating(res.data.averageRating);
-      setReviewCount(res.data.reviewCount);
+        const res = await axios.get(`http://localhost:5000/reviews/media/${id}`, { params: { page: reviewPage, limit: 10 } });
+        setReviews(res.data.reviews);
+        setAverageRating(res.data.averageRating);
+        setReviewCount(res.data.reviewCount);
+        setReviewTotalPages(res.data.pagination.totalPages);
     }
     catch (err)
     {
-      console.error(err);
+        console.error(err);
     }
-  };
+    };
 
-  const fetchLogs = async () =>
-  {
+    const fetchLogs = async () =>
+    {
     try
     {
-      const res = await axios.get(`http://localhost:5000/logs/media/${id}`);
-      setLogs(res.data.logs);
+        const res = await axios.get(`http://localhost:5000/logs/media/${id}`, { params: { page: logPage, limit: 10 } });
+        setLogs(res.data.logs);
+        setLogTotalPages(res.data.pagination.totalPages);
     }
     catch (err)
     {
-      console.error(err);
+        console.error(err);
     }
-  };
+    };
 
   const handleSubmitReview = async (e) =>
-  {
+    {
     e.preventDefault();
     setMessage('');
 
     try
     {
-      await axios.post('http://localhost:5000/reviews',
+        await axios.post('http://localhost:5000/reviews',
         { mediaId: id, rating, reviewText },
         { headers: { Authorization: `Bearer ${token}` } }
-      );
+        );
 
-      setMessage('Review filed.');
-      setRating(0);
-      setReviewText('');
-      fetchReviews();
+        setMessage('Review filed.');
+        setRating(0);
+        setReviewText('');
+        fetchReviews();
+        fetchLogs(); // review auto-creates a log entry now, so refresh this too
     }
     catch (err)
     {
-      setMessage(err.response?.data?.error || 'Failed to submit review');
+        setMessage(err.response?.data?.error || 'Failed to submit review');
     }
-  };
+    };
 
   const startEditReview = (review) =>
   {
@@ -310,6 +318,13 @@ function MediaDetail()
               )}
             </div>
           ))}
+          {reviews.length > 0 && reviewTotalPages > 1 && (
+            <div className="pagination">
+                <button className="btn btn-small" disabled={reviewPage <= 1} onClick={() => setReviewPage(reviewPage - 1)}>Prev</button>
+                <span>Page {reviewPage} of {reviewTotalPages}</span>
+                <button className="btn btn-small" disabled={reviewPage >= reviewTotalPages} onClick={() => setReviewPage(reviewPage + 1)}>Next</button>
+            </div>
+            )}
         </div>
       )}
 
@@ -384,6 +399,14 @@ function MediaDetail()
               )}
             </div>
           ))}
+
+          {logs.length > 0 && logTotalPages > 1 && (
+            <div className="pagination">
+                <button className="btn btn-small" disabled={logPage <= 1} onClick={() => setLogPage(logPage - 1)}>Prev</button>
+                <span>Page {logPage} of {logTotalPages}</span>
+                <button className="btn btn-small" disabled={logPage >= logTotalPages} onClick={() => setLogPage(logPage + 1)}>Next</button>
+            </div>
+            )}
         </div>
       )}
     </div>

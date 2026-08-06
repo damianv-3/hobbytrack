@@ -1,30 +1,60 @@
 const express = require('express');
+const axios = require('axios');
 const db = require('../config/db');
 const verifyToken = require('../middleware/verifyToken');
 
 const router = express.Router();
-const axios = require('axios');
 
+// GET all media items, optionally filtered by type, with pagination (public)
 router.get('/', async (req, res) =>
 {
   try
   {
-    const { type } = req.query;
+    const { type, page = 1, limit = 20 } = req.query;
 
-    let query = 'SELECT id, type, title, added_by, created_at FROM media_items';
+    const offset = (page - 1) * limit;
+
+    let query = `
+      SELECT m.id, m.type, m.title, m.added_by, m.created_at, a.artist, b.author
+      FROM media_items m
+      LEFT JOIN albums a ON m.id = a.media_id
+      LEFT JOIN books b ON m.id = b.media_id
+    `;
+    let countQuery = 'SELECT COUNT(*) AS total FROM media_items m';
     let params = [];
 
     if (type)
     {
-      query += ' WHERE type = ?';
+      query += ' WHERE m.type = ?';
+      countQuery += ' WHERE m.type = ?';
       params.push(type);
     }
 
-    query += ' ORDER BY created_at DESC';
+    query += ' ORDER BY m.created_at DESC LIMIT ? OFFSET ?';
 
-    const [items] = await db.query(query, params);
+    const [rows] = await db.query(query, [...params, parseInt(limit), parseInt(offset)]);
+    const [countResult] = await db.query(countQuery, params);
 
-    res.json({ items });
+    const items = rows.map((row) => (
+    {
+      id: row.id,
+      type: row.type,
+      title: row.title,
+      creator: row.artist || row.author || null,
+      createdAt: row.created_at
+    }));
+
+    res.json(
+    {
+      items,
+      pagination:
+      {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: countResult[0].total,
+        totalPages: Math.ceil(countResult[0].total / limit)
+      }
+    });
   }
   catch (err)
   {
@@ -33,6 +63,7 @@ router.get('/', async (req, res) =>
   }
 });
 
+// SEARCH media items in your own library by title (public)
 router.get('/search', async (req, res) =>
 {
   try
@@ -76,18 +107,25 @@ router.get('/:id', async (req, res) =>
     if (media.type === 'album')
     {
       const [albumRows] = await db.query('SELECT * FROM albums WHERE media_id = ?', [id]);
+
+      // if we never pulled the tracklist yet, grab it now, this only happens once per album
+      if (albumRows[0].track_count === 0 && albumRows[0].mbid)
+      {
+        await fetchAndStoreTracks(id, albumRows[0].mbid);
+      }
+
+      const [freshAlbumRows] = await db.query('SELECT * FROM albums WHERE media_id = ?', [id]);
       const [tracks] = await db.query(
         'SELECT id, title, track_number, duration_seconds FROM tracks WHERE album_media_id = ? ORDER BY track_number',
         [id]
       );
 
-      return res.json({ ...media, ...albumRows[0], tracks });
+      return res.json({ ...media, ...freshAlbumRows[0], tracks });
     }
 
     if (media.type === 'book')
     {
       const [bookRows] = await db.query('SELECT * FROM books WHERE media_id = ?', [id]);
-
       return res.json({ ...media, ...bookRows[0] });
     }
 
@@ -100,6 +138,7 @@ router.get('/:id', async (req, res) =>
   }
 });
 
+// CREATE a new album manually (protected)
 router.post('/albums', verifyToken, async (req, res) =>
 {
   const connection = await db.getConnection();
@@ -155,6 +194,7 @@ router.post('/albums', verifyToken, async (req, res) =>
   }
 });
 
+// CREATE a new book manually (protected)
 router.post('/books', verifyToken, async (req, res) =>
 {
   try
@@ -188,11 +228,52 @@ router.post('/books', verifyToken, async (req, res) =>
   }
 });
 
-// CREATE an album FROM a MusicBrainz search result (protected)
+// pulls the tracklist for an album after the fact, so "file it" doesn't have to wait on it
+async function fetchAndStoreTracks(mediaId, mbid)
+{
+  const [groupRows] = await db.query('SELECT * FROM albums WHERE media_id = ?', [mediaId]);
+  if (groupRows.length === 0) return;
+
+  const groupResponse = await axios.get(`https://musicbrainz.org/ws/2/release-group/${mbid}`,
+  {
+    params: { fmt: 'json', inc: 'releases' },
+    headers: { 'User-Agent': 'HobbyTrack/1.0 (your-email@example.com)' }
+  });
+
+  const firstReleaseId = groupResponse.data.releases?.[0]?.id;
+  if (!firstReleaseId) return;
+
+  const releaseResponse = await axios.get(`https://musicbrainz.org/ws/2/release/${firstReleaseId}`,
+  {
+    params: { fmt: 'json', inc: 'recordings' },
+    headers: { 'User-Agent': 'HobbyTrack/1.0 (your-email@example.com)' }
+  });
+
+  const tracks = [];
+  (releaseResponse.data.media || []).forEach((disc) =>
+  {
+    (disc.tracks || []).forEach((track) =>
+    {
+      tracks.push({ title: track.title, durationSeconds: track.length ? Math.round(track.length / 1000) : null });
+    });
+  });
+
+  if (tracks.length === 0) return;
+
+  for (let i = 0; i < tracks.length; i++)
+  {
+    await db.query(
+      'INSERT INTO tracks (album_media_id, title, track_number, duration_seconds) VALUES (?, ?, ?, ?)',
+      [mediaId, tracks[i].title, i + 1, tracks[i].durationSeconds]
+    );
+  }
+
+  await db.query('UPDATE albums SET track_count = ? WHERE media_id = ?', [tracks.length, mediaId]);
+}
+
+// CREATE an album FROM a MusicBrainz search result (protected, duplicate-safe, fast — tracklist loads lazily)
 router.post('/albums/from-musicbrainz', verifyToken, async (req, res) =>
 {
-  const connection = await db.getConnection();
-
   try
   {
     const { mbid } = req.body;
@@ -203,88 +284,65 @@ router.post('/albums/from-musicbrainz', verifyToken, async (req, res) =>
       return res.status(400).json({ error: 'mbid is required' });
     }
 
-    // Step 1: get release-group details (title, artist, year)
+    const [existing] = await db.query('SELECT media_id FROM albums WHERE mbid = ?', [mbid]);
+
+    if (existing.length > 0)
+    {
+      return res.status(200).json({ message: 'Already in catalog', mediaId: existing[0].media_id, alreadyExisted: true });
+    }
+
+    // one call, gets title + artist, skips the tracklist lookup entirely for now
     const groupResponse = await axios.get(`https://musicbrainz.org/ws/2/release-group/${mbid}`,
     {
-      params: { fmt: 'json', inc: 'releases' },
+      params: { fmt: 'json', inc: 'artist-credits' },
       headers: { 'User-Agent': 'HobbyTrack/1.0 (your-email@example.com)' }
     });
 
     const releaseGroup = groupResponse.data;
     const title = releaseGroup.title;
-    const releaseYear = releaseGroup['first-release-date']
-      ? releaseGroup['first-release-date'].substring(0, 4)
-      : null;
+    const artist = releaseGroup['artist-credit']?.[0]?.name || 'Unknown Artist';
+    const releaseYear = releaseGroup['first-release-date'] ? releaseGroup['first-release-date'].substring(0, 4) : null;
 
-    // Step 2: pick the first actual release to get its tracklist
-    const firstReleaseId = releaseGroup.releases?.[0]?.id;
-    let tracks = [];
-    let artist = 'Unknown Artist';
+    const connection = await db.getConnection();
 
-    if (firstReleaseId)
+    try
     {
-      const releaseResponse = await axios.get(`https://musicbrainz.org/ws/2/release/${firstReleaseId}`,
-      {
-        params: { fmt: 'json', inc: 'recordings+artist-credits' },
-        headers: { 'User-Agent': 'HobbyTrack/1.0 (your-email@example.com)' }
-      });
+      await connection.beginTransaction();
 
-      artist = releaseResponse.data['artist-credit']?.[0]?.name || 'Unknown Artist';
-
-      const media = releaseResponse.data.media || [];
-      media.forEach((disc) =>
-      {
-        (disc.tracks || []).forEach((track) =>
-        {
-          tracks.push(
-          {
-            title: track.title,
-            durationSeconds: track.length ? Math.round(track.length / 1000) : null
-          });
-        });
-      });
-    }
-
-    // Step 3: save into our database (same transaction pattern as before)
-    await connection.beginTransaction();
-
-    const [mediaResult] = await connection.query(
-      'INSERT INTO media_items (type, title, added_by) VALUES (?, ?, ?)',
-      ['album', title, userId]
-    );
-
-    const mediaId = mediaResult.insertId;
-
-    await connection.query(
-      'INSERT INTO albums (media_id, artist, release_year, track_count) VALUES (?, ?, ?, ?)',
-      [mediaId, artist, releaseYear, tracks.length]
-    );
-
-    for (let i = 0; i < tracks.length; i++)
-    {
-      await connection.query(
-        'INSERT INTO tracks (album_media_id, title, track_number, duration_seconds) VALUES (?, ?, ?, ?)',
-        [mediaId, tracks[i].title, i + 1, tracks[i].durationSeconds]
+      const [mediaResult] = await connection.query(
+        'INSERT INTO media_items (type, title, added_by) VALUES (?, ?, ?)',
+        ['album', title, userId]
       );
+
+      const mediaId = mediaResult.insertId;
+
+      await connection.query(
+        'INSERT INTO albums (media_id, artist, release_year, track_count, mbid) VALUES (?, ?, ?, 0, ?)',
+        [mediaId, artist, releaseYear, mbid]
+      );
+
+      await connection.commit();
+
+      res.status(201).json({ message: 'Album added from MusicBrainz', mediaId });
     }
-
-    await connection.commit();
-
-    res.status(201).json({ message: 'Album added from MusicBrainz', mediaId, tracksAdded: tracks.length });
+    catch (err)
+    {
+      await connection.rollback();
+      throw err;
+    }
+    finally
+    {
+      connection.release();
+    }
   }
   catch (err)
   {
-    await connection.rollback();
     console.error(err.message);
     res.status(500).json({ error: 'Failed to add album' });
   }
-  finally
-  {
-    connection.release();
-  }
 });
 
-// CREATE a book FROM a Google Books search result (protected)
+// CREATE a book FROM a Google Books search result (protected, duplicate-safe)
 router.post('/books/from-google', verifyToken, async (req, res) =>
 {
   try
@@ -295,6 +353,16 @@ router.post('/books/from-google', verifyToken, async (req, res) =>
     if (!googleBooksId)
     {
       return res.status(400).json({ error: 'googleBooksId is required' });
+    }
+
+    const [existing] = await db.query(
+      'SELECT media_id FROM books WHERE google_books_id = ?',
+      [googleBooksId]
+    );
+
+    if (existing.length > 0)
+    {
+      return res.status(200).json({ message: 'Already in catalog', mediaId: existing[0].media_id, alreadyExisted: true });
     }
 
     const response = await axios.get(`https://www.googleapis.com/books/v1/volumes/${googleBooksId}`,
@@ -316,8 +384,8 @@ router.post('/books/from-google', verifyToken, async (req, res) =>
     const mediaId = mediaResult.insertId;
 
     await db.query(
-      'INSERT INTO books (media_id, author, publish_year, page_count) VALUES (?, ?, ?, ?)',
-      [mediaId, author, publishYear, pageCount]
+      'INSERT INTO books (media_id, author, publish_year, page_count, google_books_id) VALUES (?, ?, ?, ?, ?)',
+      [mediaId, author, publishYear, pageCount, googleBooksId]
     );
 
     res.status(201).json({ message: 'Book added from Google Books', mediaId });

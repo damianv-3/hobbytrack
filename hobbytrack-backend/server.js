@@ -9,6 +9,8 @@ const logRoutes = require('./routes/logs');
 const mediaRoutes = require('./routes/media');
 const externalSearchRoutes = require('./routes/externalSearch');
 const clubRoutes = require('./routes/clubs');
+const userRoutes = require('./routes/users');
+const feedRoutes = require('./routes/feed');
 
 const app = express();
 app.use(express.json());
@@ -18,9 +20,11 @@ app.use('/logs', logRoutes);
 app.use('/media', mediaRoutes);
 app.use('/search', externalSearchRoutes);
 app.use('/clubs', clubRoutes);
+app.use('/users', userRoutes);
+app.use('/feed', feedRoutes);
 
 app.get('/', (req, res) => {
-  res.send('Server is running!');
+  res.send('Server Up');
 });
 
 const PORT = process.env.PORT || 5000;

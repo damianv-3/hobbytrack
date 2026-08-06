@@ -52,22 +52,36 @@ router.get('/', async (req, res) =>
 {
   try
   {
-    const { focusType } = req.query;
+    const { focusType, page = 1, limit = 10 } = req.query;
+    const offset = (page - 1) * limit;
 
     let query = 'SELECT id, name, description, focus_type, created_by, created_at FROM clubs';
+    let countQuery = 'SELECT COUNT(*) AS total FROM clubs';
     let params = [];
 
     if (focusType)
     {
       query += ' WHERE focus_type = ?';
+      countQuery += ' WHERE focus_type = ?';
       params.push(focusType);
     }
 
-    query += ' ORDER BY created_at DESC';
+    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
 
-    const [clubs] = await db.query(query, params);
+    const [clubs] = await db.query(query, [...params, parseInt(limit), parseInt(offset)]);
+    const [countResult] = await db.query(countQuery, params);
 
-    res.json({ clubs });
+    res.json(
+    {
+      clubs,
+      pagination:
+      {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: countResult[0].total,
+        totalPages: Math.ceil(countResult[0].total / limit)
+      }
+    });
   }
   catch (err)
   {
@@ -99,6 +113,48 @@ router.get('/:id', async (req, res) =>
     );
 
     res.json({ ...clubRows[0], members });
+  }
+  catch (err)
+  {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.get('/user/:userId', async (req, res) =>
+{
+  try
+  {
+    const { userId } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+    const offset = (page - 1) * limit;
+
+    const [clubs] = await db.query(
+      `SELECT c.id, c.name, c.description, c.focus_type, cm.role
+       FROM club_members cm
+       JOIN clubs c ON cm.club_id = c.id
+       WHERE cm.user_id = ?
+       ORDER BY cm.joined_at DESC
+       LIMIT ? OFFSET ?`,
+      [userId, parseInt(limit), parseInt(offset)]
+    );
+
+    const [countResult] = await db.query(
+      'SELECT COUNT(*) AS total FROM club_members WHERE user_id = ?',
+      [userId]
+    );
+
+    res.json(
+    {
+      clubs,
+      pagination:
+      {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: countResult[0].total,
+        totalPages: Math.ceil(countResult[0].total / limit)
+      }
+    });
   }
   catch (err)
   {

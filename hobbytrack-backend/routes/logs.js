@@ -39,17 +39,32 @@ router.get('/media/:mediaId', async (req, res) =>
   try
   {
     const { mediaId } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+    const offset = (page - 1) * limit;
 
     const [logs] = await db.query(
       `SELECT l.id, l.rating, l.logged_date, l.notes, l.created_at, l.user_id, u.username
-      FROM logs l
-      JOIN users u ON l.user_id = u.id
-      WHERE l.media_id = ?
-      ORDER BY l.logged_date DESC`,
-      [mediaId]
+       FROM logs l
+       JOIN users u ON l.user_id = u.id
+       WHERE l.media_id = ?
+       ORDER BY l.logged_date DESC
+       LIMIT ? OFFSET ?`,
+      [mediaId, parseInt(limit), parseInt(offset)]
     );
 
-    res.json({ logs });
+    const [countResult] = await db.query('SELECT COUNT(*) AS total FROM logs WHERE media_id = ?', [mediaId]);
+
+    res.json(
+    {
+      logs,
+      pagination:
+      {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: countResult[0].total,
+        totalPages: Math.ceil(countResult[0].total / limit)
+      }
+    });
   }
   catch (err)
   {
@@ -63,17 +78,32 @@ router.get('/user/:userId', async (req, res) =>
   try
   {
     const { userId } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+    const offset = (page - 1) * limit;
 
     const [logs] = await db.query(
       `SELECT l.id, l.rating, l.logged_date, l.notes, l.user_id, l.media_id, m.title, m.type
-      FROM logs l
-      JOIN media_items m ON l.media_id = m.id
-      WHERE l.user_id = ?
-      ORDER BY l.logged_date DESC`,
-      [userId]
+       FROM logs l
+       JOIN media_items m ON l.media_id = m.id
+       WHERE l.user_id = ?
+       ORDER BY l.logged_date DESC
+       LIMIT ? OFFSET ?`,
+      [userId, parseInt(limit), parseInt(offset)]
     );
 
-    res.json({ logs });
+    const [countResult] = await db.query('SELECT COUNT(*) AS total FROM logs WHERE user_id = ?', [userId]);
+
+    res.json(
+    {
+      logs,
+      pagination:
+      {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: countResult[0].total,
+        totalPages: Math.ceil(countResult[0].total / limit)
+      }
+    });
   }
   catch (err)
   {

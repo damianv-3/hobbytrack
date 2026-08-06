@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext.jsx';
+import { usePreference } from '../context/PreferenceContext.jsx';
 
 function Browse()
 {
-  const [mediaType, setMediaType] = useState('album');
+  const { mediaPreference } = usePreference();
+  const [mediaType, setMediaType] = useState(mediaPreference === 'book' ? 'book' : 'album');
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -13,6 +15,7 @@ function Browse()
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [addMessage, setAddMessage] = useState('');
+  const [addingId, setAddingId] = useState(null);
   const { token } = useAuth();
 
   useEffect(() =>
@@ -64,40 +67,45 @@ function Browse()
   };
 
   const handleAdd = async (result) =>
-  {
+    {
+    const resultId = result.mbid || result.googleBooksId;
+    if (addingId) return; // already adding something, ignore extra clicks
+    setAddingId(resultId);
     setAddMessage('');
 
     try
     {
-      if (mediaType === 'album')
-      {
+        if (mediaType === 'album')
+        {
         await axios.post('http://localhost:5000/media/albums/from-musicbrainz',
-          { mbid: result.mbid },
-          { headers: { Authorization: `Bearer ${token}` } }
+            { mbid: result.mbid },
+            { headers: { Authorization: `Bearer ${token}` } }
         );
-      }
-      else
-      {
+        }
+        else
+        {
         await axios.post('http://localhost:5000/media/books/from-google',
-          { googleBooksId: result.googleBooksId },
-          { headers: { Authorization: `Bearer ${token}` } }
+            { googleBooksId: result.googleBooksId },
+            { headers: { Authorization: `Bearer ${token}` } }
         );
-      }
+        }
 
-      setAddMessage(`Filed "${result.title}" in the catalog.`);
-      setSearchResults([]);
-      setSearchQuery('');
-      fetchLibrary();
+        setAddMessage(`Filed "${result.title}" in the catalog.`);
+        setSearchResults([]);
+        setSearchQuery('');
+        fetchLibrary();
     }
     catch (err)
     {
-      setAddMessage(err.response?.data?.error || 'Failed to add');
+        setAddMessage(err.response?.data?.error || 'Failed to add');
     }
-  };
-
+    finally
+    {
+        setAddingId(null);
+    }
+    };
   return (
     <div className="page">
-      <span className="eyebrow">Catalog Drawer</span>
       <h1>Browse</h1>
 
       <div className="type-toggle">
@@ -138,7 +146,9 @@ function Browse()
                 <strong>{result.title}</strong>
                 <div className="entry-meta">{mediaType === 'album' ? result.artist : result.author} · {result.releaseYear || result.publishYear || 'year unknown'}</div>
               </div>
-              <button className="btn btn-small" onClick={() => handleAdd(result)}>File it</button>
+                <button className="btn btn-small" onClick={() => handleAdd(result)} disabled={addingId === (result.mbid || result.googleBooksId)}>
+                    {addingId === (result.mbid || result.googleBooksId) ? 'Filing...' : 'File it'}
+                </button>
             </div>
           ))}
         </div>
@@ -155,8 +165,11 @@ function Browse()
           </div>
           {items.map((item) => (
             <Link key={item.id} to={`/media/${item.id}`} className="ledger-row linked">
-              <span className="col-num">{mediaType === 'album' ? 'MUS' : 'BK'}-{String(item.id).padStart(3, '0')}</span>
-              <span className="col-main" style={{ fontFamily: 'var(--font-display)', fontSize: '1.05rem' }}>{item.title}</span>
+            <span className="col-num">{mediaType === 'album' ? 'MUS' : 'BK'}-{String(item.id).padStart(3, '0')}</span>
+            <span className="col-main">
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.05rem' }}>{item.title}</span>
+                {item.creator && <span className="entry-meta" style={{ display: 'block' }}>{item.creator}</span>}
+            </span>
             </Link>
           ))}
         </div>
