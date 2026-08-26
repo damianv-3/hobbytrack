@@ -126,13 +126,13 @@ function Browse()
       {token && (
         <div className="card">
           <div className="card-callnumber">FIND & FILE — {mediaType === 'album' ? 'MUSIC' : 'BOOKS'}</div>
-          <form onSubmit={handleSearch} style={{ display: 'flex', gap: '0.6rem' }}>
+          <form onSubmit={handleSearch} style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={mediaType === 'album' ? 'Search for an album...' : 'Search for a book...'}
-              style={{ flex: 1, padding: '0.55rem 0.7rem', border: '1.5px solid var(--line)', borderRadius: '3px', background: 'var(--paper)' }}
+              style={{ flex: 1, minWidth: '160px', padding: '0.55rem 0.7rem', border: '1.5px solid var(--line)', borderRadius: '3px', background: 'var(--paper)' }}
             />
             <button type="submit" className="btn">Search</button>
           </form>
@@ -141,14 +141,14 @@ function Browse()
           {addMessage && <p className="success-text" style={{ marginTop: '0.75rem' }}>{addMessage}</p>}
 
           {searchResults.map((result) => (
-            <div key={result.mbid || result.googleBooksId} className="entry-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
+            <div key={result.mbid || result.googleBooksId} className="entry-row result-row">
+              <div className="result-row-text">
                 <strong>{result.title}</strong>
                 <div className="entry-meta">{mediaType === 'album' ? result.artist : result.author} · {result.releaseYear || result.publishYear || 'year unknown'}</div>
               </div>
-                <button className="btn btn-small" onClick={() => handleAdd(result)} disabled={addingId === (result.mbid || result.googleBooksId)}>
-                    {addingId === (result.mbid || result.googleBooksId) ? 'Filing...' : 'File it'}
-                </button>
+              <button className="btn btn-small" onClick={() => handleAdd(result)} disabled={addingId === (result.mbid || result.googleBooksId)}>
+                {addingId === (result.mbid || result.googleBooksId) ? 'Filing...' : 'File it'}
+              </button>
             </div>
           ))}
         </div>

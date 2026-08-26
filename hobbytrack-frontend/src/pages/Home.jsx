@@ -100,7 +100,7 @@ function Home()
 
       <div className="card">
         <div className="card-callnumber">FIND MEMBERS</div>
-        <form onSubmit={handleSearch} style={{ display: 'flex', gap: '0.5rem' }}>
+        <form onSubmit={handleSearch} style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           <input
             type="text"
             value={query}

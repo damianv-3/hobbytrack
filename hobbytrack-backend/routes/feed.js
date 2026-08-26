@@ -27,17 +27,17 @@ router.get('/', verifyToken, async (req, res) =>
        JOIN users u ON l.user_id = u.id
        JOIN media_items m ON l.media_id = m.id
        WHERE l.user_id IN (SELECT followed_id FROM follows WHERE follower_id = ?)
+         AND l.from_review_id IS NULL
        ORDER BY activity_date DESC
        LIMIT ? OFFSET ?`,
       [userId, userId, parseInt(limit), parseInt(offset)]
     );
 
-    // wrap the same union in a subquery just to count it, since UNION ALL can't be counted directly
     const [countResult] = await db.query(
       `SELECT COUNT(*) AS total FROM (
          SELECT r.id FROM reviews r WHERE r.user_id IN (SELECT followed_id FROM follows WHERE follower_id = ?)
          UNION ALL
-         SELECT l.id FROM logs l WHERE l.user_id IN (SELECT followed_id FROM follows WHERE follower_id = ?)
+         SELECT l.id FROM logs l WHERE l.user_id IN (SELECT followed_id FROM follows WHERE follower_id = ?) AND l.from_review_id IS NULL
        ) AS combined`,
       [userId, userId]
     );

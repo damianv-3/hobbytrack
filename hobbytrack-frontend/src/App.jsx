@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
 import Home from './pages/Home.jsx';
@@ -8,36 +9,51 @@ import MediaDetail from './pages/MediaDetail.jsx';
 import Profile from './pages/Profile.jsx';
 import Clubs from './pages/Clubs.jsx';
 import ClubDetail from './pages/ClubDetail.jsx';
-import QuickAdd from './components/QuickAdd.jsx';
 import './App.css';
 
 function App()
 {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const handleLogout = () =>
   {
+    setDropdownOpen(false);
     logout();
     navigate('/login');
+  };
+
+  const goToProfile = () =>
+  {
+    setDropdownOpen(false);
+    navigate('/profile');
   };
 
   return (
     <div>
       <nav className="navbar">
-        <Link to="/" className="brand-mark">Ledgible</Link>
-        <Link to="/browse" className="tab-link">Browse</Link>
-        <Link to="/clubs" className="tab-link">Clubs</Link>
-        {user && <Link to="/profile" className="tab-link">My Shelf</Link>}
+        <Link to="/" className="brand-mark">HobbyTrack</Link>
+
+        <div className="navbar-links">
+          <Link to="/browse" className="tab-link">Browse</Link>
+          <Link to="/clubs" className="tab-link">Clubs</Link>
+        </div>
 
         <div className="navbar-spacer">
           {user
             ? (
-              <>
-                <span className="navbar-user">{user.username}</span>
-                <QuickAdd />
-                <button className="btn btn-small btn-onwood" onClick={handleLogout}>Log out</button>
-              </>
+              <div className="user-menu">
+                <button className="user-menu-trigger" onClick={() => setDropdownOpen(!dropdownOpen)}>
+                  {user.username} {dropdownOpen ? '▲' : '▼'}
+                </button>
+                {dropdownOpen && (
+                  <div className="user-menu-dropdown">
+                    <button className="user-menu-item" onClick={goToProfile}>Profile</button>
+                    <button className="user-menu-item" onClick={handleLogout}>Log out</button>
+                  </div>
+                )}
+              </div>
             )
             : (
               <>

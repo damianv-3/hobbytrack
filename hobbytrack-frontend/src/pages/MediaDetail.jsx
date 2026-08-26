@@ -234,7 +234,7 @@ function MediaDetail()
           {media.type === 'album' ? 'MUS' : 'BK'} · {String(media.id).padStart(3, '0')}
         </div>
 
-        <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <div style={{ flex: 1 }}>
             <h1 style={{ marginBottom: '0.25rem' }}>{media.title}</h1>
             {media.type === 'album' && <p style={{ color: 'var(--ink-soft)' }}>{media.artist} · {media.release_year}</p>}
@@ -332,7 +332,7 @@ function MediaDetail()
         <div className="card" style={{ marginTop: '2rem' }}>
           <div className="card-callnumber">{media.type === 'album' ? 'LISTEN LOG' : 'READING LOG'}</div>
           <form onSubmit={handleSubmitLog}>
-            <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div className="stack-row">
               <div className="field" style={{ flex: '1 1 140px' }}>
                 <label>Date</label>
                 <input type="date" value={logDate} onChange={(e) => setLogDate(e.target.value)} required />

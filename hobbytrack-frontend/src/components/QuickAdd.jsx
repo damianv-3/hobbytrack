@@ -202,7 +202,7 @@ function QuickAdd()
                   <button className={mediaType === 'book' ? 'active-book' : ''} onClick={() => { setMediaType('book'); setSearched(false); setLibraryResults([]); }}>Books</button>
                 </div>
 
-                <form onSubmit={searchLibrary} style={{ display: 'flex', gap: '0.5rem' }}>
+                <form onSubmit={searchLibrary} style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                   <input
                     type="text"
                     value={query}
@@ -244,8 +244,8 @@ function QuickAdd()
                 {loading && <p className="entry-meta">Searching...</p>}
                 {!loading && externalResults.length === 0 && <p className="empty-state">No results found.</p>}
                 {!loading && externalResults.map((result) => (
-                  <div key={result.mbid || result.googleBooksId} className="entry-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
+                  <div key={result.mbid || result.googleBooksId} className="entry-row result-row">
+                    <div className="result-row-text">
                       <strong>{result.title}</strong>
                       <div className="entry-meta">{mediaType === 'album' ? result.artist : result.author} · {result.releaseYear || result.publishYear || 'unknown'}</div>
                     </div>
@@ -278,7 +278,7 @@ function QuickAdd()
                 <div className="card">
                   <h3>Log entry</h3>
                   <form onSubmit={submitLog}>
-                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                    <div className="stack-row">
                       <div className="field" style={{ flex: '1 1 130px' }}>
                         <label>Date</label>
                         <input type="date" value={logDate} onChange={(e) => setLogDate(e.target.value)} required />

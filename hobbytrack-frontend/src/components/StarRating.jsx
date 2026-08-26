@@ -10,7 +10,7 @@ function StarRating({ value, onChange, readOnly = false, size = '1.4rem' })
   };
 
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.3rem' }}>
       <span className="star-rating" style={{ fontSize: size }}>
         {stars.map((starNumber) =>
         {

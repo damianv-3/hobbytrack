@@ -25,16 +25,18 @@ router.post('/', verifyToken, async (req, res) =>
       [userId, mediaId, rating, reviewText || null]
     );
 
-    // filing a review also counts as logging it today, same as letterboxd does
+    const reviewId = result.insertId;
     const today = new Date().toISOString().substring(0, 10);
+
+    // tag this log with the review that created it, so the feed can skip showing both
     await connection.query(
-      'INSERT INTO logs (user_id, media_id, rating, logged_date, notes) VALUES (?, ?, ?, ?, ?)',
-      [userId, mediaId, rating, today, reviewText || null]
+      'INSERT INTO logs (user_id, media_id, rating, logged_date, notes, from_review_id) VALUES (?, ?, ?, ?, ?, ?)',
+      [userId, mediaId, rating, today, reviewText || null, reviewId]
     );
 
     await connection.commit();
 
-    res.status(201).json({ message: 'Review created', reviewId: result.insertId });
+    res.status(201).json({ message: 'Review created', reviewId });
   }
   catch (err)
   {
