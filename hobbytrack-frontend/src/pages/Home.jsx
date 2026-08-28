@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useDataRefresh } from '../context/DataRefreshContext.jsx';
+import { searchUsers, getFollowing, followUser, unfollowUser } from '../api/users.js';
+import { getFeed } from '../api/feed.js';
 import StarRating from '../components/StarRating.jsx';
+import Pagination from '../components/Pagination.jsx';
 import { timeAgo } from '../utils/timeAgo.js';
 
 function Home()
@@ -20,35 +22,33 @@ function Home()
   const [feedTotalPages, setFeedTotalPages] = useState(1);
 
   useEffect(() =>
-    {
+  {
     if (user)
     {
-        fetchFollowing();
-        fetchFeed();
+      fetchFollowing();
+      fetchFeed();
     }
-    }, [user, refreshKey, feedPage]);
+  }, [user, refreshKey, feedPage]);
 
-    const fetchFollowing = async () =>
-    {
-    const res = await axios.get(`http://localhost:5000/users/${user.userId}/following`);
+  const fetchFollowing = async () =>
+  {
+    const res = await getFollowing(user.userId);
     setFollowing(res.data.following);
-    };
+  };
 
   const fetchFeed = async () =>
-    {
-        const res = await axios.get('http://localhost:5000/feed',
-        { headers: { Authorization: `Bearer ${token}` }, params: { page: feedPage, limit: 15 } }
-        );
-        setFeed(res.data.entries);
-        setFeedTotalPages(res.data.pagination.totalPages);
-    };
+  {
+    const res = await getFeed(token, feedPage, 15);
+    setFeed(res.data.entries);
+    setFeedTotalPages(res.data.pagination.totalPages);
+  };
 
   const handleSearch = async (e) =>
   {
     e.preventDefault();
     setSearchMsg('');
 
-    const res = await axios.get('http://localhost:5000/users/search', { params: { q: query } });
+    const res = await searchUsers(query);
     setResults(res.data.users.filter((u) => u.id !== user.userId));
   };
 
@@ -58,9 +58,7 @@ function Home()
   {
     try
     {
-      await axios.post(`http://localhost:5000/users/${id}/follow`, {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await followUser(token, id);
       fetchFollowing();
       fetchFeed();
     }
@@ -72,9 +70,7 @@ function Home()
 
   const handleUnfollow = async (id) =>
   {
-    await axios.delete(`http://localhost:5000/users/${id}/unfollow`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+    await unfollowUser(token, id);
     fetchFollowing();
     fetchFeed();
   };
@@ -119,13 +115,7 @@ function Home()
               : <button className="btn btn-small btn-primary" onClick={() => handleFollow(result.id)}>Follow</button>}
           </div>
         ))}
-        {feed.length > 0 && feedTotalPages > 1 && (
-            <div className="pagination">
-                <button className="btn btn-small" disabled={feedPage <= 1} onClick={() => setFeedPage(feedPage - 1)}>Prev</button>
-                <span>Page {feedPage} of {feedTotalPages}</span>
-                <button className="btn btn-small" disabled={feedPage >= feedTotalPages} onClick={() => setFeedPage(feedPage + 1)}>Next</button>
-            </div>
-            )}
+        <Pagination page={feedPage} totalPages={feedTotalPages} onChange={setFeedPage} />
       </div>
 
       <h3 style={{ marginTop: '2rem' }}>Activity from members you follow</h3>
@@ -139,19 +129,19 @@ function Home()
             <span className="col-meta">Rating</span>
           </div>
           {feed.map((entry) => (
-            <div key={`${entry.entry_type}-${entry.id}`} className="ledger-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-                <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div key={entry.id} className="ledger-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+              <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>
-                    <strong>{entry.username}</strong>
-                    <span className="entry-meta"> {entry.entry_type === 'review' ? 'reviewed' : 'logged'} </span>
-                    <Link to={`/media/${entry.media_id}`} style={{ fontFamily: 'var(--font-display)' }}>{entry.title}</Link>
-                    <span className="entry-meta"> · {timeAgo(entry.activity_date)}</span>
+                  <strong>{entry.username}</strong>
+                  <span className="entry-meta"> logged </span>
+                  <Link to={`/media/${entry.media_id}`} style={{ fontFamily: 'var(--font-display)' }}>{entry.title}</Link>
+                  <span className="entry-meta"> · {timeAgo(entry.activity_date)}</span>
                 </span>
                 {entry.rating && <StarRating value={parseFloat(entry.rating)} readOnly size="1rem" />}
-                </div>
-                {entry.notes && <p style={{ marginTop: '0.3rem', marginBottom: 0 }}>{entry.notes}</p>}
+              </div>
+              {entry.notes && <p style={{ marginTop: '0.3rem', marginBottom: 0 }}>{entry.notes}</p>}
             </div>
-            ))}
+          ))}
         </div>
       )}
     </div>

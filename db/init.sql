@@ -125,12 +125,9 @@ CREATE TABLE `logs` (
   `logged_date` date NOT NULL,
   `notes` text,
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  `from_review_id` int DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `user_id` (`user_id`),
   KEY `media_id` (`media_id`),
-  KEY `fk_logs_review` (`from_review_id`),
-  CONSTRAINT `fk_logs_review` FOREIGN KEY (`from_review_id`) REFERENCES `reviews` (`id`) ON DELETE SET NULL,
   CONSTRAINT `logs_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   CONSTRAINT `logs_ibfk_2` FOREIGN KEY (`media_id`) REFERENCES `media_items` (`id`) ON DELETE CASCADE,
   CONSTRAINT `check_log_rating` CHECK (((`rating` is null) or ((`rating` >= 0.5) and (`rating` <= 5.0) and (((`rating` * 2) % 1) = 0))))
@@ -179,29 +176,6 @@ CREATE TABLE `meetings` (
   CONSTRAINT `meetings_ibfk_2` FOREIGN KEY (`media_id`) REFERENCES `media_items` (`id`) ON DELETE SET NULL,
   CONSTRAINT `meetings_ibfk_3` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Table structure for table `reviews`
---
-
-DROP TABLE IF EXISTS `reviews`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!50503 SET character_set_client = utf8mb4 */;
-CREATE TABLE `reviews` (
-  `id` int NOT NULL AUTO_INCREMENT,
-  `user_id` int NOT NULL,
-  `media_id` int NOT NULL,
-  `rating` decimal(3,1) DEFAULT NULL,
-  `review_text` text,
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `unique_user_review` (`user_id`,`media_id`),
-  KEY `media_id` (`media_id`),
-  CONSTRAINT `reviews_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `reviews_ibfk_2` FOREIGN KEY (`media_id`) REFERENCES `media_items` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `check_rating_range` CHECK (((`rating` >= 0.5) and (`rating` <= 5.0) and (((`rating` * 2) % 1) = 0)))
-) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --

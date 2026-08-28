@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import { useAuth } from '../context/AuthContext.jsx';
+import { getClub, getMeetings, joinClub, leaveClub, deleteClub, scheduleMeeting } from '../api/clubs.js';
 
 function ClubDetail()
 {
@@ -32,7 +32,7 @@ function ClubDetail()
   {
     try
     {
-      const res = await axios.get(`http://localhost:5000/clubs/${id}`);
+      const res = await getClub(id);
       setClub(res.data);
     }
     catch (err)
@@ -45,7 +45,7 @@ function ClubDetail()
   {
     try
     {
-      const res = await axios.get(`http://localhost:5000/clubs/${id}/meetings`);
+      const res = await getMeetings(id);
       setMeetings(res.data.meetings);
     }
     catch (err)
@@ -59,9 +59,7 @@ function ClubDetail()
     setMessage('');
     try
     {
-      await axios.post(`http://localhost:5000/clubs/${id}/join`, {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await joinClub(token, id);
       fetchClub();
     }
     catch (err)
@@ -75,9 +73,7 @@ function ClubDetail()
     setMessage('');
     try
     {
-      await axios.delete(`http://localhost:5000/clubs/${id}/leave`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await leaveClub(token, id);
       fetchClub();
     }
     catch (err)
@@ -90,9 +86,7 @@ function ClubDetail()
   {
     try
     {
-      await axios.delete(`http://localhost:5000/clubs/${id}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await deleteClub(token, id);
       navigate('/clubs');
     }
     catch (err)
@@ -108,10 +102,7 @@ function ClubDetail()
 
     try
     {
-      await axios.post(`http://localhost:5000/clubs/${id}/meetings`,
-        { mediaId: mediaId || null, meetingDate, notes },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await scheduleMeeting(token, id, { mediaId, meetingDate, notes });
       setMeetingMessage('Meeting scheduled.');
       setMediaId('');
       setMeetingDate('');

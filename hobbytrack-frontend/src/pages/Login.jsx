@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import axios from 'axios';
 import { useAuth } from '../context/AuthContext.jsx';
+import { login as loginRequest } from '../api/auth.js';
 
 function Login()
 {
@@ -22,7 +22,7 @@ function Login()
 
     try
     {
-      const res = await axios.post('http://localhost:5000/auth/login', formData);
+      const res = await loginRequest(formData);
       login(res.data.token);
       navigate('/');
     }

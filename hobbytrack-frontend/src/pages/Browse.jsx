@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
 import { useAuth } from '../context/AuthContext.jsx';
 import { usePreference } from '../context/PreferenceContext.jsx';
+import { getMediaList, searchExternal, addAlbumFromMusicBrainz, addBookFromGoogle } from '../api/media.js';
+import Pagination from '../components/Pagination.jsx';
 
 function Browse()
 {
@@ -27,10 +28,7 @@ function Browse()
   {
     try
     {
-      const res = await axios.get('http://localhost:5000/media',
-      {
-        params: { type: mediaType, page, limit: 10 }
-      });
+      const res = await getMediaList(mediaType, page, 10);
       setItems(res.data.items);
       setTotalPages(res.data.pagination.totalPages);
     }
@@ -49,11 +47,7 @@ function Browse()
 
     try
     {
-      const endpoint = mediaType === 'album' ? '/search/albums' : '/search/books';
-      const res = await axios.get(`http://localhost:5000${endpoint}`,
-      {
-        params: { q: searchQuery }
-      });
+      const res = await searchExternal(mediaType, searchQuery);
       setSearchResults(res.data.results);
     }
     catch (err)
@@ -67,60 +61,45 @@ function Browse()
   };
 
   const handleAdd = async (result) =>
-    {
+  {
     const resultId = result.mbid || result.googleBooksId;
-    if (addingId) return; // already adding something, ignore extra clicks
+    if (addingId) return;
     setAddingId(resultId);
     setAddMessage('');
 
     try
     {
-        if (mediaType === 'album')
-        {
-        await axios.post('http://localhost:5000/media/albums/from-musicbrainz',
-            { mbid: result.mbid },
-            { headers: { Authorization: `Bearer ${token}` } }
-        );
-        }
-        else
-        {
-        await axios.post('http://localhost:5000/media/books/from-google',
-            { googleBooksId: result.googleBooksId },
-            { headers: { Authorization: `Bearer ${token}` } }
-        );
-        }
+      if (mediaType === 'album')
+      {
+        await addAlbumFromMusicBrainz(token, result.mbid);
+      }
+      else
+      {
+        await addBookFromGoogle(token, result.googleBooksId);
+      }
 
-        setAddMessage(`Filed "${result.title}" in the catalog.`);
-        setSearchResults([]);
-        setSearchQuery('');
-        fetchLibrary();
+      setAddMessage(`Filed "${result.title}" in the catalog.`);
+      setSearchResults([]);
+      setSearchQuery('');
+      fetchLibrary();
     }
     catch (err)
     {
-        setAddMessage(err.response?.data?.error || 'Failed to add');
+      setAddMessage(err.response?.data?.error || 'Failed to add');
     }
     finally
     {
-        setAddingId(null);
+      setAddingId(null);
     }
-    };
+  };
+
   return (
     <div className="page">
       <h1>Browse</h1>
 
       <div className="type-toggle">
-        <button
-          className={mediaType === 'album' ? 'active-music' : ''}
-          onClick={() => { setMediaType('album'); setPage(1); }}
-        >
-          Music
-        </button>
-        <button
-          className={mediaType === 'book' ? 'active-book' : ''}
-          onClick={() => { setMediaType('book'); setPage(1); }}
-        >
-          Books
-        </button>
+        <button className={mediaType === 'album' ? 'active-music' : ''} onClick={() => { setMediaType('album'); setPage(1); }}>Music</button>
+        <button className={mediaType === 'book' ? 'active-book' : ''} onClick={() => { setMediaType('book'); setPage(1); }}>Books</button>
       </div>
 
       {token && (
@@ -165,23 +144,17 @@ function Browse()
           </div>
           {items.map((item) => (
             <Link key={item.id} to={`/media/${item.id}`} className="ledger-row linked">
-            <span className="col-num">{mediaType === 'album' ? 'MUS' : 'BK'}-{String(item.id).padStart(3, '0')}</span>
-            <span className="col-main">
+              <span className="col-num">{mediaType === 'album' ? 'MUS' : 'BK'}-{String(item.id).padStart(3, '0')}</span>
+              <span className="col-main">
                 <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.05rem' }}>{item.title}</span>
                 {item.creator && <span className="entry-meta" style={{ display: 'block' }}>{item.creator}</span>}
-            </span>
+              </span>
             </Link>
           ))}
         </div>
       )}
 
-      {items.length > 0 && (
-        <div className="pagination">
-          <button className="btn btn-small" disabled={page <= 1} onClick={() => setPage(page - 1)}>Prev</button>
-          <span>Page {page} of {totalPages}</span>
-          <button className="btn btn-small" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</button>
-        </div>
-      )}
+      {items.length > 0 && <Pagination page={page} totalPages={totalPages} onChange={setPage} />}
     </div>
   );
 }

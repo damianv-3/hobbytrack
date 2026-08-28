@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
 import { useAuth } from '../context/AuthContext.jsx';
 import { usePreference } from '../context/PreferenceContext.jsx';
 import { useDataRefresh } from '../context/DataRefreshContext.jsx';
+import { getUser, getFollowers, getFollowing } from '../api/users.js';
+import { getLogsForUser, deleteLog, createLog } from '../api/logs.js';
+import { getClubsForUser } from '../api/clubs.js';
 import StarRating from '../components/StarRating.jsx';
+import Pagination from '../components/Pagination.jsx';
 
 function Profile()
 {
@@ -12,12 +15,8 @@ function Profile()
   const { mediaPreference, setMediaPreference } = usePreference();
   const { refreshKey } = useDataRefresh();
 
-  const [tab, setTab] = useState('reviews');
+  const [tab, setTab] = useState('logs');
   const [profileInfo, setProfileInfo] = useState(null);
-
-  const [reviews, setReviews] = useState([]);
-  const [reviewPage, setReviewPage] = useState(1);
-  const [reviewTotalPages, setReviewTotalPages] = useState(1);
 
   const [logs, setLogs] = useState([]);
   const [logPage, setLogPage] = useState(1);
@@ -26,10 +25,6 @@ function Profile()
   const [clubs, setClubs] = useState([]);
   const [clubPage, setClubPage] = useState(1);
   const [clubTotalPages, setClubTotalPages] = useState(1);
-
-  const [editingReviewId, setEditingReviewId] = useState(null);
-  const [editRating, setEditRating] = useState(0);
-  const [editText, setEditText] = useState('');
 
   const [relogTargetId, setRelogTargetId] = useState(null);
   const [relogDate, setRelogDate] = useState('');
@@ -43,16 +38,8 @@ function Profile()
 
   useEffect(() =>
   {
-    if (user)
-    {
-      fetchProfileInfo();
-    }
+    if (user) fetchProfileInfo();
   }, [user, refreshKey]);
-
-  useEffect(() =>
-  {
-    if (user) fetchReviews();
-  }, [user, refreshKey, reviewPage]);
 
   useEffect(() =>
   {
@@ -66,71 +53,41 @@ function Profile()
 
   const fetchProfileInfo = async () =>
   {
-    const res = await axios.get(`http://localhost:5000/users/${user.userId}`);
+    const res = await getUser(user.userId);
     setProfileInfo(res.data);
-  };
-
-  const fetchReviews = async () =>
-  {
-    const res = await axios.get(`http://localhost:5000/reviews/user/${user.userId}`, { params: { page: reviewPage, limit: 8 } });
-    setReviews(res.data.reviews);
-    setReviewTotalPages(res.data.pagination.totalPages);
   };
 
   const fetchLogs = async () =>
   {
-    const res = await axios.get(`http://localhost:5000/logs/user/${user.userId}`, { params: { page: logPage, limit: 8 } });
+    const res = await getLogsForUser(user.userId, logPage, 8);
     setLogs(res.data.logs);
     setLogTotalPages(res.data.pagination.totalPages);
   };
 
   const fetchClubs = async () =>
   {
-    const res = await axios.get(`http://localhost:5000/clubs/user/${user.userId}`, { params: { page: clubPage, limit: 8 } });
+    const res = await getClubsForUser(user.userId, clubPage, 8);
     setClubs(res.data.clubs);
     setClubTotalPages(res.data.pagination.totalPages);
   };
 
   const openFollowers = async () =>
   {
-    const res = await axios.get(`http://localhost:5000/users/${user.userId}/followers`);
+    const res = await getFollowers(user.userId);
     setFollowerList(res.data.followers);
     setShowFollowers(true);
   };
 
   const openFollowing = async () =>
   {
-    const res = await axios.get(`http://localhost:5000/users/${user.userId}/following`);
+    const res = await getFollowing(user.userId);
     setFollowingList(res.data.following);
     setShowFollowing(true);
   };
 
-  const startEditReview = (review) =>
-  {
-    setEditingReviewId(review.id);
-    setEditRating(parseFloat(review.rating));
-    setEditText(review.review_text || '');
-  };
-
-  const handleUpdateReview = async (reviewId) =>
-  {
-    await axios.put(`http://localhost:5000/reviews/${reviewId}`,
-      { rating: editRating, reviewText: editText },
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    setEditingReviewId(null);
-    fetchReviews();
-  };
-
-  const handleDeleteReview = async (reviewId) =>
-  {
-    await axios.delete(`http://localhost:5000/reviews/${reviewId}`, { headers: { Authorization: `Bearer ${token}` } });
-    fetchReviews();
-  };
-
   const handleDeleteLog = async (logId) =>
   {
-    await axios.delete(`http://localhost:5000/logs/${logId}`, { headers: { Authorization: `Bearer ${token}` } });
+    await deleteLog(token, logId);
     fetchLogs();
   };
 
@@ -146,10 +103,7 @@ function Profile()
   {
     try
     {
-      await axios.post('http://localhost:5000/logs',
-        { mediaId, rating: relogRating || null, loggedDate: relogDate, notes: '' },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await createLog(token, { mediaId, rating: relogRating, loggedDate: relogDate, notes: '' });
       setRelogMessage('Logged again.');
       setRelogTargetId(null);
       fetchLogs();
@@ -165,7 +119,6 @@ function Profile()
     return <div className="page"><p className="empty-state">Log in to see your shelf.</p></div>;
   }
 
-  const filteredReviews = reviews.filter((r) => mediaPreference === 'both' || r.type === mediaPreference);
   const filteredLogs = logs.filter((l) => mediaPreference === 'both' || l.type === mediaPreference);
   const filteredClubs = clubs.filter((c) => mediaPreference === 'both' || c.focus_type === mediaPreference || c.focus_type === 'both');
 
@@ -188,10 +141,6 @@ function Profile()
 
         {profileInfo && (
           <div className="libcard-stats">
-            <div className="stat-static">
-              <strong>{profileInfo.reviewCount}</strong>
-              Reviews
-            </div>
             <div className="stat-static">
               <strong>{profileInfo.logCount}</strong>
               Logs
@@ -240,57 +189,9 @@ function Profile()
       </div>
 
       <div className="type-toggle">
-        <button className={tab === 'reviews' ? 'active-music' : ''} onClick={() => setTab('reviews')}>Reviews</button>
         <button className={tab === 'logs' ? 'active-book' : ''} onClick={() => setTab('logs')}>Activity Log</button>
         <button className={tab === 'clubs' ? 'active-music' : ''} onClick={() => setTab('clubs')}>Clubs</button>
       </div>
-
-      {tab === 'reviews' && (
-        <>
-          {filteredReviews.length === 0 && <p className="empty-state">No reviews filed yet.</p>}
-          {filteredReviews.length > 0 && (
-            <div className="ledger">
-              <div className="ledger-head">
-                <span className="col-main">Title</span>
-                <span className="col-meta">Rating</span>
-              </div>
-              {filteredReviews.map((review) => (
-                <div key={review.id} className="ledger-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-                  {editingReviewId === review.id ? (
-                    <div style={{ width: '100%' }}>
-                      <StarRating value={editRating} onChange={setEditRating} size="1.1rem" />
-                      <textarea value={editText} onChange={(e) => setEditText(e.target.value)} rows={2} style={{ width: '100%', marginTop: '0.4rem' }} />
-                      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.4rem' }}>
-                        <button className="btn btn-small btn-primary" onClick={() => handleUpdateReview(review.id)}>Save</button>
-                        <button className="btn btn-small" onClick={() => setEditingReviewId(null)}>Cancel</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Link to={`/media/${review.media_id}`} style={{ fontFamily: 'var(--font-display)', fontSize: '1.05rem' }}>{review.title}</Link>
-                        <StarRating value={parseFloat(review.rating)} readOnly size="1.1rem" />
-                      </div>
-                      {review.review_text && <p style={{ marginTop: '0.3rem', marginBottom: 0 }}>{review.review_text}</p>}
-                      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.4rem' }}>
-                        <button className="btn btn-small" onClick={() => startEditReview(review)}>Edit</button>
-                        <button className="btn btn-small" onClick={() => handleDeleteReview(review.id)}>Delete</button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-          {reviews.length > 0 && reviewTotalPages > 1 && (
-            <div className="pagination">
-              <button className="btn btn-small" disabled={reviewPage <= 1} onClick={() => setReviewPage(reviewPage - 1)}>Prev</button>
-              <span>Page {reviewPage} of {reviewTotalPages}</span>
-              <button className="btn btn-small" disabled={reviewPage >= reviewTotalPages} onClick={() => setReviewPage(reviewPage + 1)}>Next</button>
-            </div>
-          )}
-        </>
-      )}
 
       {tab === 'logs' && (
         <>
@@ -333,13 +234,7 @@ function Profile()
                   )}
                 </div>
               ))}
-            </div>
-          )}
-          {logs.length > 0 && logTotalPages > 1 && (
-            <div className="pagination">
-              <button className="btn btn-small" disabled={logPage <= 1} onClick={() => setLogPage(logPage - 1)}>Prev</button>
-              <span>Page {logPage} of {logTotalPages}</span>
-              <button className="btn btn-small" disabled={logPage >= logTotalPages} onClick={() => setLogPage(logPage + 1)}>Next</button>
+              <Pagination page={logPage} totalPages={logTotalPages} onChange={setLogPage} />
             </div>
           )}
         </>
@@ -363,13 +258,7 @@ function Profile()
                   <span className="col-meta" style={{ textTransform: 'capitalize' }}>{club.role}</span>
                 </Link>
               ))}
-            </div>
-          )}
-          {clubs.length > 0 && clubTotalPages > 1 && (
-            <div className="pagination">
-              <button className="btn btn-small" disabled={clubPage <= 1} onClick={() => setClubPage(clubPage - 1)}>Prev</button>
-              <span>Page {clubPage} of {clubTotalPages}</span>
-              <button className="btn btn-small" disabled={clubPage >= clubTotalPages} onClick={() => setClubPage(clubPage + 1)}>Next</button>
+              <Pagination page={clubPage} totalPages={clubTotalPages} onChange={setClubPage} />
             </div>
           )}
         </>

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
 import { useAuth } from '../context/AuthContext.jsx';
+import { getClubs, createClub } from '../api/clubs.js';
+import Pagination from '../components/Pagination.jsx';
 
 function Clubs()
 {
@@ -16,27 +17,24 @@ function Clubs()
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
-  useEffect(() =>    
-    {
-        fetchClubs();
-    }, [focusFilter, page]);
- 
-    const fetchClubs = async () =>
-    {
+  useEffect(() =>
+  {
+    fetchClubs();
+  }, [focusFilter, page]);
+
+  const fetchClubs = async () =>
+  {
     try
     {
-        const res = await axios.get('http://localhost:5000/clubs',
-        {
-        params: { ...(focusFilter ? { focusType: focusFilter } : {}), page, limit: 10 }
-        });
-        setClubs(res.data.clubs);
-        setTotalPages(res.data.pagination.totalPages);
+      const res = await getClubs(focusFilter || undefined, page, 10);
+      setClubs(res.data.clubs);
+      setTotalPages(res.data.pagination.totalPages);
     }
     catch (err)
     {
-        console.error(err);
+      console.error(err);
     }
-    };
+  };
 
   const handleCreate = async (e) =>
   {
@@ -45,11 +43,7 @@ function Clubs()
 
     try
     {
-      await axios.post('http://localhost:5000/clubs',
-        { name, description, focusType },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
+      await createClub(token, { name, description, focusType });
       setMessage('Club chartered.');
       setName('');
       setDescription('');
@@ -123,17 +117,9 @@ function Clubs()
               <span className="col-meta" style={{ textTransform: 'capitalize' }}>{club.focus_type}</span>
             </Link>
           ))}
-
-          {clubs.length > 0 && totalPages > 1 && (
-            <div className="pagination">
-                <button className="btn btn-small" disabled={page <= 1} onClick={() => setPage(page - 1)}>Prev</button>
-                <span>Page {page} of {totalPages}</span>
-                <button className="btn btn-small" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</button>
-            </div>
-            )}
+          <Pagination page={page} totalPages={totalPages} onChange={setPage} />
         </div>
       )}
-      
     </div>
   );
 }

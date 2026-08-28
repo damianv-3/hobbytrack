@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
 import { useAuth } from '../context/AuthContext.jsx';
-import StarRating from './StarRating.jsx';
 import { useDataRefresh } from '../context/DataRefreshContext.jsx';
+import { searchMediaLibrary, searchExternal, addAlbumFromMusicBrainz, addBookFromGoogle } from '../api/media.js';
+import { createLog } from '../api/logs.js';
+import LogForm from './LogForm.jsx';
 
 function QuickAdd()
 {
   const { token } = useAuth();
   const navigate = useNavigate();
+  const { bumpRefresh } = useDataRefresh();
 
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState('search'); // search | external | form
@@ -18,19 +20,8 @@ function QuickAdd()
   const [externalResults, setExternalResults] = useState([]);
   const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(false);
-
   const [selected, setSelected] = useState(null); // { id, title, type }
-
-  const [rating, setRating] = useState(0);
-  const [reviewText, setReviewText] = useState('');
-  const [reviewMsg, setReviewMsg] = useState('');
-
-  const [logDate, setLogDate] = useState(new Date().toISOString().substring(0, 10));
-  const [logRating, setLogRating] = useState(0);
-  const [logNotes, setLogNotes] = useState('');
   const [logMsg, setLogMsg] = useState('');
-
-  const { bumpRefresh } = useDataRefresh();
 
   const reset = () =>
   {
@@ -40,12 +31,6 @@ function QuickAdd()
     setExternalResults([]);
     setSearched(false);
     setSelected(null);
-    setRating(0);
-    setReviewText('');
-    setReviewMsg('');
-    setLogDate(new Date().toISOString().substring(0, 10));
-    setLogRating(0);
-    setLogNotes('');
     setLogMsg('');
   };
 
@@ -63,7 +48,7 @@ function QuickAdd()
 
     try
     {
-      const res = await axios.get('http://localhost:5000/media/search', { params: { q: query } });
+      const res = await searchMediaLibrary(query);
       setLibraryResults(res.data.items.filter((item) => item.type === mediaType));
     }
     catch (err)
@@ -76,14 +61,13 @@ function QuickAdd()
     }
   };
 
-  const searchExternal = async () =>
+  const searchExternalItems = async () =>
   {
     setLoading(true);
 
     try
     {
-      const endpoint = mediaType === 'album' ? '/search/albums' : '/search/books';
-      const res = await axios.get(`http://localhost:5000${endpoint}`, { params: { q: query } });
+      const res = await searchExternal(mediaType, query);
       setExternalResults(res.data.results);
       setStep('external');
     }
@@ -101,26 +85,11 @@ function QuickAdd()
   {
     try
     {
-      let mediaId;
+      const res = mediaType === 'album'
+        ? await addAlbumFromMusicBrainz(token, result.mbid)
+        : await addBookFromGoogle(token, result.googleBooksId);
 
-      if (mediaType === 'album')
-      {
-        const res = await axios.post('http://localhost:5000/media/albums/from-musicbrainz',
-          { mbid: result.mbid },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        mediaId = res.data.mediaId;
-      }
-      else
-      {
-        const res = await axios.post('http://localhost:5000/media/books/from-google',
-          { googleBooksId: result.googleBooksId },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        mediaId = res.data.mediaId;
-      }
-
-      setSelected({ id: mediaId, title: result.title, type: mediaType });
+      setSelected({ id: res.data.mediaId, title: result.title, type: mediaType });
       setStep('form');
     }
     catch (err)
@@ -135,37 +104,13 @@ function QuickAdd()
     setStep('form');
   };
 
-  const submitReview = async (e) =>
+  const submitLog = async ({ loggedDate, rating, notes }) =>
   {
-    e.preventDefault();
-    setReviewMsg('');
-
-    try
-    {
-      await axios.post('http://localhost:5000/reviews',
-        { mediaId: selected.id, rating, reviewText },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setReviewMsg('Review filed.');
-      bumpRefresh();
-    }
-    catch (err)
-    {
-      setReviewMsg(err.response?.data?.error || 'Failed to submit review');
-    }
-  };
-
-  const submitLog = async (e) =>
-  {
-    e.preventDefault();
     setLogMsg('');
 
     try
     {
-      await axios.post('http://localhost:5000/logs',
-        { mediaId: selected.id, rating: logRating || null, loggedDate: logDate, notes: logNotes },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await createLog(token, { mediaId: selected.id, rating, loggedDate, notes });
       setLogMsg('Stamped into the log.');
       bumpRefresh();
     }
@@ -185,7 +130,7 @@ function QuickAdd()
 
   return (
     <>
-      <button className="fab btn-onwood" onClick={() => setOpen(true)} title="Review or log something" aria-label="Review or log something">+</button>
+      <button className="fab btn-onwood" onClick={() => setOpen(true)} title="Log something" aria-label="Log something">+</button>
 
       {open && (
         <div className="modal-overlay" onClick={close}>
@@ -229,7 +174,7 @@ function QuickAdd()
                 {searched && !loading && libraryResults.length === 0 && (
                   <div style={{ marginTop: '1rem' }}>
                     <p className="empty-state">Not in your library yet.</p>
-                    <button className="btn btn-primary" onClick={searchExternal} disabled={!query}>
+                    <button className="btn btn-primary" onClick={searchExternalItems} disabled={!query}>
                       Search {mediaType === 'album' ? 'MusicBrainz' : 'Google Books'} instead
                     </button>
                   </div>
@@ -259,40 +204,10 @@ function QuickAdd()
             {step === 'form' && selected && (
               <>
                 <div className="card-callnumber">{selected.type === 'album' ? 'MUS' : 'BK'} · {selected.title}</div>
-                <h2 style={{ fontSize: '1.3rem' }}>Review &amp; log</h2>
-
-                <div className="card" style={{ marginBottom: '1rem' }}>
-                  <h3>Review</h3>
-                  <form onSubmit={submitReview}>
-                    <div className="field">
-                      <StarRating value={rating} onChange={setRating} size="1.2rem" />
-                    </div>
-                    <div className="field">
-                      <textarea value={reviewText} onChange={(e) => setReviewText(e.target.value)} rows={2} placeholder="Optional review..." />
-                    </div>
-                    <button type="submit" className="btn btn-primary" disabled={!rating}>File review</button>
-                  </form>
-                  {reviewMsg && <p className={reviewMsg.includes('filed') ? 'success-text' : 'error-text'}>{reviewMsg}</p>}
-                </div>
+                <h2 style={{ fontSize: '1.3rem' }}>Log entry</h2>
 
                 <div className="card">
-                  <h3>Log entry</h3>
-                  <form onSubmit={submitLog}>
-                    <div className="stack-row">
-                      <div className="field" style={{ flex: '1 1 130px' }}>
-                        <label>Date</label>
-                        <input type="date" value={logDate} onChange={(e) => setLogDate(e.target.value)} required />
-                      </div>
-                      <div className="field" style={{ flex: '1 1 150px' }}>
-                        <label>Rating (optional)</label>
-                        <StarRating value={logRating} onChange={setLogRating} size="1rem" />
-                      </div>
-                    </div>
-                    <div className="field">
-                      <textarea value={logNotes} onChange={(e) => setLogNotes(e.target.value)} rows={2} placeholder="Notes (optional)..." />
-                    </div>
-                    <button type="submit" className="btn">Stamp entry</button>
-                  </form>
+                  <LogForm onSubmit={submitLog} />
                   {logMsg && <p className="success-text">{logMsg}</p>}
                 </div>
 

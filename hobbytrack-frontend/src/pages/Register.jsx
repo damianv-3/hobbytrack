@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import axios from 'axios';
+import { register } from '../api/auth.js';
 
 function Register()
 {
@@ -21,7 +21,7 @@ function Register()
 
     try
     {
-      await axios.post('http://localhost:5000/auth/register', formData);
+      await register(formData);
       setSuccess(true);
       setTimeout(() => navigate('/login'), 1500);
     }
